@@ -11,7 +11,7 @@ use std::marker::PhantomData;
 
 const SPAWN_Y: i32 = 64;
 
-pub(crate) fn main() {
+fn main() {
     App::new()
         .insert_resource(NetworkSettings {
             connection_mode: ConnectionMode::Offline,
