@@ -4,28 +4,28 @@ use chunkedge_protocol::packets::play::UseItemC2s;
 use chunkedge_protocol::Hand;
 
 use crate::action::ActionSequence;
-use crate::event_loop::{EventLoopPreUpdate, PacketEvent};
+use crate::event_loop::{EventLoopPreUpdate, PacketMessage};
 
 pub struct InteractItemPlugin;
 
 impl Plugin for InteractItemPlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<InteractItemEvent>()
+        app.add_message::<InteractItemMessage>()
             .add_systems(EventLoopPreUpdate, handle_player_interact_item);
     }
 }
 
-#[derive(Event, Copy, Clone, Debug)]
-pub struct InteractItemEvent {
+#[derive(Message, Copy, Clone, Debug)]
+pub struct InteractItemMessage {
     pub client: Entity,
     pub hand: Hand,
     pub sequence: i32,
 }
 
 fn handle_player_interact_item(
-    mut packets: EventReader<PacketEvent>,
+    mut packets: MessageReader<PacketMessage>,
     mut clients: Query<&mut ActionSequence>,
-    mut events: EventWriter<InteractItemEvent>,
+    mut messages: MessageWriter<InteractItemMessage>,
 ) {
     for packet in packets.read() {
         if let Some(pkt) = packet.decode::<UseItemC2s>() {
@@ -33,7 +33,7 @@ fn handle_player_interact_item(
                 action_seq.update(pkt.sequence.0);
             }
 
-            events.send(InteractItemEvent {
+            messages.write(InteractItemMessage {
                 client: packet.client,
                 hand: pkt.hand,
                 sequence: pkt.sequence.0,

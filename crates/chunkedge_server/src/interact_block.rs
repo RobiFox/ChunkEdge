@@ -5,19 +5,19 @@ use chunkedge_protocol::packets::play::UseItemOnC2s;
 use chunkedge_protocol::{BlockPos, Direction, Hand};
 
 use crate::action::ActionSequence;
-use crate::event_loop::{EventLoopPreUpdate, PacketEvent};
+use crate::event_loop::{EventLoopPreUpdate, PacketMessage};
 
 pub struct InteractBlockPlugin;
 
 impl Plugin for InteractBlockPlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<InteractBlockEvent>()
+        app.add_message::<InteractBlockMessage>()
             .add_systems(EventLoopPreUpdate, handle_interact_block);
     }
 }
 
-#[derive(Event, Copy, Clone, Debug)]
-pub struct InteractBlockEvent {
+#[derive(Message, Copy, Clone, Debug)]
+pub struct InteractBlockMessage {
     pub client: Entity,
     /// The hand that was used
     pub hand: Hand,
@@ -34,9 +34,9 @@ pub struct InteractBlockEvent {
 }
 
 fn handle_interact_block(
-    mut packets: EventReader<PacketEvent>,
+    mut packets: MessageReader<PacketMessage>,
     mut clients: Query<&mut ActionSequence>,
-    mut events: EventWriter<InteractBlockEvent>,
+    mut messages: MessageWriter<InteractBlockMessage>,
 ) {
     for packet in packets.read() {
         if let Some(pkt) = packet.decode::<UseItemOnC2s>() {
@@ -46,7 +46,7 @@ fn handle_interact_block(
 
             // TODO: check that the block interaction is valid.
 
-            events.send(InteractBlockEvent {
+            messages.write(InteractBlockMessage {
                 client: packet.client,
                 hand: pkt.hand,
                 position: pkt.position,

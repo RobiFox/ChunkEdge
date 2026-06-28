@@ -1,9 +1,7 @@
 use std::io::Write;
 
 #[cfg(feature = "encryption")]
-use aes::cipher::generic_array::GenericArray;
-#[cfg(feature = "encryption")]
-use aes::cipher::{BlockEncryptMut, BlockSizeUser, KeyIvInit};
+use aes::cipher::KeyIvInit;
 use anyhow::ensure;
 use bytes::{BufMut, BytesMut};
 use chunkedge_binary::{Encode, VarInt};
@@ -76,7 +74,7 @@ impl PacketEncoder {
             use flate2::bufread::ZlibEncoder;
             use flate2::Compression;
 
-            if data_len > self.threshold.0 as usize {
+            if data_len >= self.threshold.0 as usize {
                 let mut z = ZlibEncoder::new(&self.buf[start_len..], Compression::new(4));
 
                 self.compress_buf.clear();
@@ -150,10 +148,7 @@ impl PacketEncoder {
     pub fn take(&mut self) -> BytesMut {
         #[cfg(feature = "encryption")]
         if let Some(cipher) = &mut self.cipher {
-            for chunk in self.buf.chunks_mut(Cipher::block_size()) {
-                let gen_arr = GenericArray::from_mut_slice(chunk);
-                cipher.encrypt_block_mut(gen_arr);
-            }
+            cipher.encrypt(&mut self.buf);
         }
 
         self.buf.split()
@@ -346,7 +341,7 @@ where
 
     let data_len = buf.len() - start_len;
 
-    if data_len > threshold as usize {
+    if data_len >= threshold as usize {
         let mut z = ZlibEncoder::new(&buf[start_len..], Compression::new(4));
 
         let mut scratch = vec![];

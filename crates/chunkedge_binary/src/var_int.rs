@@ -37,6 +37,13 @@ impl VarInt {
 
     /// Returns the exact number of bytes this varint will write when
     /// [`Encode::encode`] is called, assuming no error occurs.
+    ///
+    /// This is the size of "canonical" (non-padded) encoding for this
+    /// value, not necessarily the number of bytes that were consumed
+    /// while decoding it. Minecraft `VarInts` may be padded by using
+    /// more continuation bytes than the value requires, so callers that
+    /// need the decoded wire length should compare the input slice length
+    /// before and after decoding instead.
     pub const fn written_size(self) -> usize {
         match self.0 {
             0 => 1,
@@ -111,17 +118,17 @@ impl Decode<'_> for VarInt {
 
 #[cfg(test)]
 mod tests {
-    use rand::{thread_rng, Rng};
+    use rand::{rng, RngExt};
 
     use super::*;
 
     #[test]
     fn varint_written_size() {
-        let mut rng = thread_rng();
+        let mut rng = rng();
         let mut buf = vec![];
 
         for n in (0..100_000)
-            .map(|_| rng.gen())
+            .map(|_| rng.random::<i32>())
             .chain([0, i32::MIN, i32::MAX])
             .map(VarInt)
         {
@@ -133,11 +140,11 @@ mod tests {
 
     #[test]
     fn varint_round_trip() {
-        let mut rng = thread_rng();
+        let mut rng = rng();
         let mut buf = vec![];
 
         for n in (0..1_000_000)
-            .map(|_| rng.gen())
+            .map(|_| rng.random::<i32>())
             .chain([0, i32::MIN, i32::MAX])
         {
             VarInt(n).encode(&mut buf).unwrap();

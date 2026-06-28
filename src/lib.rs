@@ -1,11 +1,13 @@
 #![cfg_attr(
     unstable_doc,
-    doc = "**❗ NOTE:** This documentation is sourced from the `main` branch. Guides and general project documentation can be found in [`docs`].\n\n---\n"
+    doc = "**❗ NOTE:** This documentation is sourced from the `main` branch. Guides and general \
+           project documentation can be found in [`docs`].\n\n---\n"
 )]
 #![doc = include_str!("../README.md")]
 #![cfg_attr(
     doc,
-    doc = "\n\n## General Project Documentation\n\nThe guides, FAQ, and other pages are available in [`docs`].\n"
+    doc = "\n\n## General Project Documentation\n\nThe guides, FAQ, and other pages are available \
+           in [`docs`].\n"
 )]
 #![doc(
     html_logo_url = "https://raw.githubusercontent.com/ChunkEdge/ChunkEdge/main/assets/logo.svg",
@@ -56,6 +58,8 @@ pub use chunkedge_command_macros as command_macros;
 pub use chunkedge_equipment as equipment;
 #[cfg(feature = "inventory")]
 pub use chunkedge_inventory as inventory;
+pub use chunkedge_item as item;
+pub use chunkedge_lang as lang;
 #[cfg(feature = "network")]
 pub use chunkedge_network as network;
 #[cfg(feature = "player_list")]
@@ -81,6 +85,7 @@ use chunkedge_server::layer::LayerPlugin;
 use chunkedge_server::message::MessagePlugin;
 use chunkedge_server::movement::MovementPlugin;
 use chunkedge_server::op_level::OpLevelPlugin;
+use chunkedge_server::passenger::PassengerPlugin;
 pub use chunkedge_server::protocol::status_effects;
 use chunkedge_server::resource_pack::ResourcePackPlugin;
 use chunkedge_server::status::StatusPlugin;
@@ -93,7 +98,6 @@ pub use chunkedge_weather as weather;
 pub use chunkedge_world_border as world_border;
 use registry::biome::BiomePlugin;
 use registry::dimension_type::DimensionTypePlugin;
-pub use {chunkedge_item as item, chunkedge_lang as lang};
 
 /// Contains the most frequently used items in ChunkEdge projects.
 ///
@@ -113,8 +117,9 @@ pub mod prelude {
     pub use bevy_ecs::prelude::*;
     #[cfg(feature = "advancement")]
     pub use chunkedge_advancement::{
-        event::AdvancementTabChangeEvent, Advancement, AdvancementBundle, AdvancementClientUpdate,
-        AdvancementCriteria, AdvancementDisplay, AdvancementFrameType, AdvancementRequirements,
+        message::AdvancementTabChangeMessage, Advancement, AdvancementBundle,
+        AdvancementClientUpdate, AdvancementCriteria, AdvancementDisplay, AdvancementFrameType,
+        AdvancementRequirements,
     };
     #[cfg(feature = "equipment")]
     pub use chunkedge_equipment::Equipment;
@@ -131,15 +136,15 @@ pub mod prelude {
     pub use chunkedge_player_list::{PlayerList, PlayerListEntry};
     pub use chunkedge_registry::biome::{Biome, BiomeId, BiomeRegistry};
     pub use chunkedge_registry::dimension_type::{DimensionType, DimensionTypeRegistry};
-    pub use chunkedge_server::action::{DiggingEvent, DiggingState};
+    pub use chunkedge_server::action::{DiggingMessage, DiggingState};
     pub use chunkedge_server::block::{BlockKind, BlockState, PropName, PropValue};
     pub use chunkedge_server::client::{
         despawn_disconnected_clients, Client, Ip, OldView, OldViewDistance, Properties, Username,
         View, ViewDistance, VisibleChunkLayer, VisibleEntityLayers,
     };
     pub use chunkedge_server::client_command::{
-        JumpWithHorseEvent, JumpWithHorseState, LeaveBedEvent, PlayerCommand, SneakEvent,
-        SneakState, SprintEvent, SprintState,
+        JumpWithHorseMessage, JumpWithHorseState, LeaveBedMessage, PlayerCommand, SneakMessage,
+        SneakState, SprintMessage, SprintState,
     };
     pub use chunkedge_server::entity::hitbox::{Hitbox, HitboxShape};
     pub use chunkedge_server::entity::{
@@ -150,7 +155,7 @@ pub mod prelude {
         EventLoopPostUpdate, EventLoopPreUpdate, EventLoopUpdate,
     };
     pub use chunkedge_server::ident::Ident;
-    pub use chunkedge_server::interact_entity::{EntityInteraction, InteractEntityEvent};
+    pub use chunkedge_server::interact_entity::{EntityInteraction, InteractEntityMessage};
     pub use chunkedge_server::layer::chunk::{
         Block, BlockRef, Chunk, ChunkLayer, LoadedChunk, UnloadedChunk,
     };
@@ -158,6 +163,7 @@ pub mod prelude {
     pub use chunkedge_server::math::{DVec2, DVec3, Vec2, Vec3};
     pub use chunkedge_server::message::SendMessage as _;
     pub use chunkedge_server::nbt::Compound;
+    pub use chunkedge_server::passenger::{Passengers, Riding};
     pub use chunkedge_server::protocol::packets::play::level_particles_s2c::Particle;
     pub use chunkedge_server::protocol::text::{Color, IntoText, Text};
     pub use chunkedge_server::protocol::RegistryId;
@@ -199,6 +205,7 @@ impl PluginGroup for DefaultPlugins {
             .add(ClientCommandPlugin)
             .add(KeepalivePlugin)
             .add(InteractEntityPlugin)
+            .add(PassengerPlugin)
             .add(ClientSettingsPlugin)
             .add(ActionPlugin)
             .add(TeleportPlugin)

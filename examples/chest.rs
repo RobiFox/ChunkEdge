@@ -1,6 +1,6 @@
 #![allow(clippy::type_complexity)]
 
-use chunkedge::interact_block::InteractBlockEvent;
+use chunkedge::interact_block::InteractBlockMessage;
 use chunkedge::prelude::*;
 
 const SPAWN_Y: i32 = 64;
@@ -77,7 +77,7 @@ fn init_clients(
         mut game_mode,
     ) in &mut clients
     {
-        let layer = layers.single();
+        let layer = layers.single().unwrap();
 
         layer_id.0 = layer;
         visible_chunk_layer.0 = layer;
@@ -89,14 +89,14 @@ fn init_clients(
 
 fn toggle_gamemode_on_sneak(
     mut clients: Query<&mut GameMode>,
-    mut events: EventReader<SneakEvent>,
+    mut messages: MessageReader<SneakMessage>,
 ) {
-    for event in events.read() {
-        let Ok(mut mode) = clients.get_mut(event.client) else {
+    for message in messages.read() {
+        let Ok(mut mode) = clients.get_mut(message.client) else {
             continue;
         };
 
-        if event.state == SneakState::Start {
+        if message.state == SneakState::Start {
             *mode = match *mode {
                 GameMode::Survival => GameMode::Creative,
                 GameMode::Creative => GameMode::Survival,
@@ -109,13 +109,13 @@ fn toggle_gamemode_on_sneak(
 fn open_chest(
     mut commands: Commands,
     inventories: Query<Entity, (With<Inventory>, Without<Client>)>,
-    mut events: EventReader<InteractBlockEvent>,
+    mut messages: MessageReader<InteractBlockMessage>,
 ) {
-    for event in events.read() {
-        if event.position != CHEST_POS.into() {
+    for message in messages.read() {
+        if message.position != CHEST_POS.into() {
             continue;
         }
-        let open_inventory = OpenInventory::new(inventories.single());
-        commands.entity(event.client).insert(open_inventory);
+        let open_inventory = OpenInventory::new(inventories.single().unwrap());
+        commands.entity(message.client).insert(open_inventory);
     }
 }

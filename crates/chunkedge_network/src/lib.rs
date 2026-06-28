@@ -34,7 +34,7 @@ use connect::do_accept_loop;
 pub use connect::HandshakeData;
 use flume::{Receiver, Sender};
 pub use legacy_ping::{ServerListLegacyPingPayload, ServerListLegacyPingResponse};
-use rand::rngs::OsRng;
+use rsa::rand_core::OsRng;
 use rsa::traits::PublicKeyParts;
 use rsa::RsaPrivateKey;
 use serde::Serialize;
@@ -612,7 +612,8 @@ pub enum ConnectionMode {
     /// [Velocity]: https://velocitypowered.com/
     Velocity {
         /// The secret key used to prevent connections from outside Velocity.
-        /// The proxy and ChunkEdge must be configured to use the same secret key.
+        /// The proxy and ChunkEdge must be configured to use the same secret
+        /// key.
         secret: Arc<str>,
     },
 }

@@ -2,7 +2,7 @@
 
 use std::f64::consts::TAU;
 
-use chunkedge::abilities::{PlayerStartFlyingEvent, PlayerStopFlyingEvent};
+use chunkedge::abilities::{PlayerStartFlyingMessage, PlayerStopFlyingMessage};
 use chunkedge::math::{DQuat, EulerRot};
 use chunkedge::message::SendMessage;
 use chunkedge::prelude::*;
@@ -88,7 +88,7 @@ fn init_clients(
         mut game_mode,
     ) in &mut clients
     {
-        let layer = layers.single();
+        let layer = layers.single().unwrap();
 
         layer_id.0 = layer;
         visible_chunk_layer.0 = layer;
@@ -152,18 +152,18 @@ fn lerp(a: f64, b: f64, t: f64) -> f64 {
 
 // Send an actionbar message to all clients when their flying state changes.
 fn display_is_flying(
-    mut player_start_flying_events: EventReader<PlayerStartFlyingEvent>,
-    mut player_stop_flying_events: EventReader<PlayerStopFlyingEvent>,
+    mut player_start_flying_messages: MessageReader<PlayerStartFlyingMessage>,
+    mut player_stop_flying_messages: MessageReader<PlayerStopFlyingMessage>,
     mut clients: Query<&mut Client>,
 ) {
-    for event in player_start_flying_events.read() {
-        if let Ok(mut client) = clients.get_mut(event.client) {
+    for message in player_start_flying_messages.read() {
+        if let Ok(mut client) = clients.get_mut(message.client) {
             client.send_action_bar_message("You are flying!".color(NamedColor::Green));
         }
     }
 
-    for event in player_stop_flying_events.read() {
-        if let Ok(mut client) = clients.get_mut(event.client) {
+    for message in player_stop_flying_messages.read() {
+        if let Ok(mut client) = clients.get_mut(message.client) {
             client.send_action_bar_message("You are no longer flying!".color(NamedColor::Red));
         }
     }

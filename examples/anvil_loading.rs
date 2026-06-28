@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use chunkedge::abilities::{FlyingSpeed, FovModifier, PlayerAbilitiesFlags};
 use chunkedge::message::SendMessage;
 use chunkedge::prelude::*;
-use chunkedge_anvil::{AnvilLevel, ChunkLoadEvent, ChunkLoadStatus};
+use chunkedge_anvil::{AnvilLevel, ChunkLoadMessage, ChunkLoadStatus};
 use clap::Parser;
 
 const SPAWN_POS: DVec3 = DVec3::new(0.0, 256.0, 0.0);
@@ -100,7 +100,7 @@ fn init_clients(
         mut fov_modifier,
     ) in &mut clients
     {
-        let layer = layers.single();
+        let layer = layers.single().unwrap();
 
         layer_id.0 = layer;
         visible_chunk_layer.0 = layer;
@@ -114,32 +114,32 @@ fn init_clients(
 }
 
 fn handle_chunk_loads(
-    mut events: EventReader<ChunkLoadEvent>,
+    mut messages: MessageReader<ChunkLoadMessage>,
     mut layers: Query<&mut ChunkLayer, With<AnvilLevel>>,
 ) {
-    let mut layer = layers.single_mut();
+    let mut layer = layers.single_mut().unwrap();
 
-    for event in events.read() {
-        match &event.status {
+    for message in messages.read() {
+        match &message.status {
             ChunkLoadStatus::Success { .. } => {
                 // The chunk was inserted into the world. Nothing for us to do.
             }
             ChunkLoadStatus::Empty => {
                 // There's no chunk here so let's insert an empty chunk. If we were doing
                 // terrain generation we would prepare that here.
-                layer.insert_chunk(event.pos, UnloadedChunk::new());
+                layer.insert_chunk(message.pos, UnloadedChunk::new());
             }
             ChunkLoadStatus::Failed(e) => {
                 // Something went wrong.
                 let errmsg = format!(
                     "failed to load chunk at ({}, {}): {e:#}",
-                    event.pos.x, event.pos.z
+                    message.pos.x, message.pos.z
                 );
 
                 eprintln!("{errmsg}");
                 layer.send_chat_message(errmsg.color(Color::RED));
 
-                layer.insert_chunk(event.pos, UnloadedChunk::new());
+                layer.insert_chunk(message.pos, UnloadedChunk::new());
             }
         }
     }
@@ -147,7 +147,7 @@ fn handle_chunk_loads(
 
 // Display the number of loaded chunks in the action bar of all clients.
 fn display_loaded_chunk_count(mut layers: Query<&mut ChunkLayer>, mut last_count: Local<usize>) {
-    let mut layer = layers.single_mut();
+    let mut layer = layers.single_mut().unwrap();
 
     let cnt = layer.chunks().count();
 

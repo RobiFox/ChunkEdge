@@ -3,7 +3,7 @@
 use bevy_app::App;
 use chunkedge::client::despawn_disconnected_clients;
 use chunkedge::inventory::HeldItem;
-use chunkedge::message::{ChatMessageEvent, SendMessage};
+use chunkedge::message::{ChatReceivedMessage, SendMessage};
 use chunkedge::prelude::*;
 use chunkedge::world_border::*;
 
@@ -84,7 +84,7 @@ fn init_clients(
         main_slot,
     ) in &mut clients
     {
-        let layer = layers.single();
+        let layer = layers.single().unwrap();
 
         layer_id.0 = layer;
         visible_chunk_layer.0 = layer;
@@ -106,10 +106,10 @@ fn display_diameter(mut layers: Query<(&mut ChunkLayer, &WorldBorderLerp)>) {
 }
 
 fn border_controls(
-    mut events: EventReader<ChatMessageEvent>,
+    mut messages: MessageReader<ChatReceivedMessage>,
     mut layers: Query<(&mut WorldBorderCenter, &mut WorldBorderLerp), With<ChunkLayer>>,
 ) {
-    for x in events.read() {
+    for x in messages.read() {
         let parts: Vec<&str> = x.message.split(' ').collect();
         match parts[0] {
             "add" => {
@@ -121,7 +121,7 @@ fn border_controls(
                     return;
                 };
 
-                let (_, mut lerp) = layers.single_mut();
+                let (_, mut lerp) = layers.single_mut().unwrap();
 
                 lerp.target_diameter = lerp.current_diameter + value;
                 lerp.remaining_ticks = ticks;
@@ -135,7 +135,7 @@ fn border_controls(
                     return;
                 };
 
-                let (mut center, _) = layers.single_mut();
+                let (mut center, _) = layers.single_mut().unwrap();
                 center.x = x;
                 center.z = z;
             }

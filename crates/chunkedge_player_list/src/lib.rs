@@ -36,7 +36,7 @@ impl Plugin for PlayerListPlugin {
                 (
                     update_header_footer,
                     add_new_clients_to_player_list,
-                    apply_deferred, // So new clients get the packets for their own entry.
+                    ApplyDeferred, // So new clients get the packets for their own entry.
                     update_entries,
                     init_player_list_for_clients,
                     remove_despawned_entries,
@@ -212,8 +212,8 @@ fn init_player_list_for_clients(
                                 .as_ref()
                                 .map(IntoTextComponent::into_cow_text_component),
                             priority: 0,
-                            hat: false, // TODO: Hat
-                                        // priority: todo!("Implement priority"),
+                            hat: false, /* TODO: Hat
+                                         * priority: todo!("Implement priority"), */
                         }
                     },
                 )

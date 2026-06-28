@@ -4,7 +4,7 @@ use bevy_ecs::query::QueryData;
 use chunkedge::entity::EntityStatuses;
 use chunkedge::math::Vec3Swizzles;
 use chunkedge::prelude::*;
-use rand::Rng;
+use rand::RngExt;
 
 const SPAWN_Y: i32 = 64;
 const ARENA_RADIUS: i32 = 32;
@@ -21,7 +21,7 @@ pub fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, setup)
-        .add_systems(EventLoopUpdate, handle_combat_events)
+        .add_systems(EventLoopUpdate, handle_combat_messages)
         .add_systems(
             Update,
             (
@@ -47,7 +47,7 @@ fn setup(
         }
     }
 
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     // Create circular arena.
     for z in -ARENA_RADIUS..ARENA_RADIUS {
@@ -58,7 +58,7 @@ fn setup(
                 continue;
             }
 
-            let block = if rng.gen::<f64>() < dist {
+            let block = if rng.random::<f64>() < dist {
                 BlockState::STONE
             } else {
                 BlockState::DEEPSLATE
@@ -97,7 +97,7 @@ fn init_clients(
         mut game_mode,
     ) in &mut clients
     {
-        let layer = layers.single();
+        let layer = layers.single().unwrap();
 
         layer_id.0 = layer;
         visible_chunk_layer.0 = layer;
@@ -118,19 +118,19 @@ struct CombatQuery {
     statuses: &'static mut EntityStatuses,
 }
 
-fn handle_combat_events(
+fn handle_combat_messages(
     server: Res<Server>,
     mut clients: Query<CombatQuery>,
-    mut sprinting: EventReader<SprintEvent>,
-    mut interact_entity: EventReader<InteractEntityEvent>,
+    mut sprinting: MessageReader<SprintMessage>,
+    mut interact_entity: MessageReader<InteractEntityMessage>,
 ) {
-    for &SprintEvent { client, state } in sprinting.read() {
+    for &SprintMessage { client, state } in sprinting.read() {
         if let Ok(mut client) = clients.get_mut(client) {
             client.state.has_bonus_knockback = state == SprintState::Start;
         }
     }
 
-    for &InteractEntityEvent {
+    for &InteractEntityMessage {
         client: attacker_client,
         entity: victim_client,
         ..

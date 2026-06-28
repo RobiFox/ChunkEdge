@@ -6,9 +6,9 @@ use chunkedge_boss_bar::{
     BossBarTitle,
 };
 use chunkedge_server::entity::cow::CowEntityBundle;
-use chunkedge_server::message::ChatMessageEvent;
+use chunkedge_server::message::ChatReceivedMessage;
 use chunkedge_text::color::NamedColor;
-use rand::seq::SliceRandom;
+use rand::seq::IndexedRandom;
 
 const SPAWN_Y: i32 = 64;
 
@@ -90,7 +90,7 @@ fn init_clients(
     >,
     layers_query: Query<Entity, (With<ChunkLayer>, With<EntityLayer>)>,
 ) {
-    let layer = layers_query.single();
+    let layer = layers_query.single().unwrap();
 
     for (
         mut client,
@@ -137,7 +137,7 @@ fn init_clients(
 }
 
 fn listen_messages(
-    mut message_events: EventReader<ChatMessageEvent>,
+    mut message_messages: MessageReader<ChatReceivedMessage>,
     mut boss_bars_query: Query<
         (
             &mut BossBarStyle,
@@ -156,11 +156,11 @@ fn listen_messages(
         mut boss_bar_health,
         mut boss_bar_title,
         entity_layer_id,
-    ) = boss_bars_query.single_mut();
+    ) = boss_bars_query.single_mut().unwrap();
 
-    for ChatMessageEvent {
+    for ChatReceivedMessage {
         client, message, ..
-    } in message_events.read()
+    } in message_messages.read()
     {
         match message.as_ref() {
             "view" => {
@@ -182,7 +182,7 @@ fn listen_messages(
                 ];
                 colors.retain(|c| *c != boss_bar_style.color);
 
-                let random_color = colors.choose(&mut rand::thread_rng()).unwrap();
+                let random_color = colors.choose(&mut rand::rng()).unwrap();
 
                 boss_bar_style.color = *random_color;
             }
@@ -196,7 +196,7 @@ fn listen_messages(
                 ];
                 divisions.retain(|d| *d != boss_bar_style.division);
 
-                let random_division = divisions.choose(&mut rand::thread_rng()).unwrap();
+                let random_division = divisions.choose(&mut rand::rng()).unwrap();
 
                 boss_bar_style.division = *random_division;
             }

@@ -3,8 +3,8 @@ use std::marker::PhantomData;
 
 use bevy_app::{App, Plugin, PostStartup};
 use bevy_ecs::change_detection::ResMut;
-use bevy_ecs::event::{Event, EventReader, EventWriter};
-use bevy_ecs::prelude::{Entity, IntoSystemConfigs, Resource};
+use bevy_ecs::message::{Message, MessageReader, MessageWriter};
+use bevy_ecs::prelude::{Entity, IntoScheduleConfigs, Resource};
 use chunkedge_server::EventLoopPreUpdate;
 use petgraph::prelude::NodeIndex;
 
@@ -12,7 +12,7 @@ use crate::graph::CommandGraphBuilder;
 use crate::modifier_value::ModifierValue;
 use crate::parsers::ParseInput;
 use crate::{
-    Command, CommandProcessedEvent, CommandRegistry, CommandScopeRegistry, CommandSystemSet,
+    Command, CommandProcessedMessage, CommandRegistry, CommandScopeRegistry, CommandSystemSet,
 };
 
 impl<T> Plugin for CommandHandlerPlugin<T>
@@ -20,12 +20,12 @@ where
     T: Command + Send + Sync + 'static,
 {
     fn build(&self, app: &mut App) {
-        app.add_event::<CommandResultEvent<T>>()
+        app.add_message::<CommandResultMessage<T>>()
             .insert_resource(CommandResource::<T>::new())
             .add_systems(PostStartup, command_startup_system::<T>)
             .add_systems(
                 EventLoopPreUpdate,
-                command_event_system::<T>.after(CommandSystemSet),
+                command_message_system::<T>.after(CommandSystemSet),
             );
     }
 }
@@ -69,8 +69,8 @@ impl<T: Command + Send + Sync> CommandResource<T> {
     }
 }
 
-#[derive(Event)]
-pub struct CommandResultEvent<T>
+#[derive(Message)]
+pub struct CommandResultMessage<T>
 where
     T: Command,
     T: Send + Sync + 'static,
@@ -105,21 +105,21 @@ fn command_startup_system<T>(
     registry.executables.extend(executables.keys());
 }
 
-/// This system reads incoming command events.
-fn command_event_system<T>(
-    mut commands_executed: EventReader<CommandProcessedEvent>,
-    mut events: EventWriter<CommandResultEvent<T>>,
+/// This system reads incoming command messages.
+fn command_message_system<T>(
+    mut commands_executed: MessageReader<CommandProcessedMessage>,
+    mut messages: MessageWriter<CommandResultMessage<T>>,
     command: ResMut<CommandResource<T>>,
 ) where
     T: Command + Send + Sync,
 {
-    for command_event in commands_executed.read() {
-        if let Some(executable) = command.executables.get(&command_event.node) {
-            let result = executable(&mut ParseInput::new(&command_event.command));
-            events.send(CommandResultEvent {
+    for command_message in commands_executed.read() {
+        if let Some(executable) = command.executables.get(&command_message.node) {
+            let result = executable(&mut ParseInput::new(&command_message.command));
+            messages.write(CommandResultMessage {
                 result,
-                executor: command_event.executor,
-                modifiers: command_event.modifiers.clone(),
+                executor: command_message.executor,
+                modifiers: command_message.modifiers.clone(),
             });
         }
     }

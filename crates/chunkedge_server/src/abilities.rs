@@ -6,7 +6,7 @@ use chunkedge_protocol::{GameMode, WritePacket};
 use derive_more::{Deref, DerefMut};
 
 use crate::client::{update_game_mode, Client, UpdateClientsSet};
-use crate::event_loop::{EventLoopPreUpdate, PacketEvent};
+use crate::event_loop::{EventLoopPreUpdate, PacketMessage};
 
 /// [`Component`] that stores the player's flying speed ability.
 ///
@@ -34,14 +34,14 @@ impl Default for FovModifier {
 }
 
 /// Send if the client sends [`PlayerAbilitiesC2s::StartFlying`]
-#[derive(Event)]
-pub struct PlayerStartFlyingEvent {
+#[derive(Message)]
+pub struct PlayerStartFlyingMessage {
     pub client: Entity,
 }
 
 /// Send if the client sends [`PlayerAbilitiesC2s::StopFlying`]
-#[derive(Event)]
-pub struct PlayerStopFlyingEvent {
+#[derive(Message)]
+pub struct PlayerStopFlyingMessage {
     pub client: Entity,
 }
 
@@ -62,8 +62,8 @@ pub struct AbilitiesPlugin;
 
 impl Plugin for AbilitiesPlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<PlayerStartFlyingEvent>()
-            .add_event::<PlayerStopFlyingEvent>()
+        app.add_message::<PlayerStartFlyingMessage>()
+            .add_message::<PlayerStopFlyingMessage>()
             .add_systems(
                 PostUpdate,
                 (
@@ -104,8 +104,8 @@ fn update_client_player_abilities(
 /// /!\ This system does not trigger change detection on
 /// [`PlayerAbilitiesFlags`]
 fn update_player_abilities(
-    mut player_start_flying_event_writer: EventWriter<PlayerStartFlyingEvent>,
-    mut player_stop_flying_event_writer: EventWriter<PlayerStopFlyingEvent>,
+    mut player_start_flying_message_writer: MessageWriter<PlayerStartFlyingMessage>,
+    mut player_stop_flying_message_writer: MessageWriter<PlayerStopFlyingMessage>,
     mut client_query: Query<(Entity, &mut PlayerAbilitiesFlags, &GameMode), Changed<GameMode>>,
 ) {
     for (entity, mut mut_flags, gamemode) in &mut client_query {
@@ -121,21 +121,22 @@ fn update_player_abilities(
                 flags.set_allow_flying(true);
                 flags.set_instant_break(false);
                 flags.set_flying(true);
-                player_start_flying_event_writer.send(PlayerStartFlyingEvent { client: entity });
+                player_start_flying_message_writer
+                    .write(PlayerStartFlyingMessage { client: entity });
             }
             GameMode::Survival => {
                 flags.set_invulnerable(false);
                 flags.set_allow_flying(false);
                 flags.set_instant_break(false);
                 flags.set_flying(false);
-                player_stop_flying_event_writer.send(PlayerStopFlyingEvent { client: entity });
+                player_stop_flying_message_writer.write(PlayerStopFlyingMessage { client: entity });
             }
             GameMode::Adventure => {
                 flags.set_invulnerable(false);
                 flags.set_allow_flying(false);
                 flags.set_instant_break(false);
                 flags.set_flying(false);
-                player_stop_flying_event_writer.send(PlayerStopFlyingEvent { client: entity });
+                player_stop_flying_message_writer.write(PlayerStopFlyingMessage { client: entity });
             }
         }
     }
@@ -144,25 +145,25 @@ fn update_player_abilities(
 /// /!\ This system does not trigger change detection on
 /// [`PlayerAbilitiesFlags`]
 fn update_server_player_abilities(
-    mut packet_events: EventReader<PacketEvent>,
-    mut player_start_flying_event_writer: EventWriter<PlayerStartFlyingEvent>,
-    mut player_stop_flying_event_writer: EventWriter<PlayerStopFlyingEvent>,
+    mut packet_messages: MessageReader<PacketMessage>,
+    mut player_start_flying_message_writer: MessageWriter<PlayerStartFlyingMessage>,
+    mut player_stop_flying_message_writer: MessageWriter<PlayerStopFlyingMessage>,
     mut client_query: Query<&mut PlayerAbilitiesFlags>,
 ) {
-    for packets in packet_events.read() {
+    for packets in packet_messages.read() {
         if let Some(pkt) = packets.decode::<PlayerAbilitiesC2s>() {
             if let Ok(mut mut_flags) = client_query.get_mut(packets.client) {
                 let flags = mut_flags.bypass_change_detection();
                 match pkt {
                     PlayerAbilitiesC2s::StartFlying => {
                         flags.set_flying(true);
-                        player_start_flying_event_writer.send(PlayerStartFlyingEvent {
+                        player_start_flying_message_writer.write(PlayerStartFlyingMessage {
                             client: packets.client,
                         });
                     }
                     PlayerAbilitiesC2s::StopFlying => {
                         flags.set_flying(false);
-                        player_stop_flying_event_writer.send(PlayerStopFlyingEvent {
+                        player_stop_flying_message_writer.write(PlayerStopFlyingMessage {
                             client: packets.client,
                         });
                     }

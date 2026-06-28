@@ -6,12 +6,12 @@
 
 const SPAWN_Y: i32 = 64;
 
-use chunkedge::interact_item::InteractItemEvent;
+use chunkedge::interact_item::InteractItemMessage;
 use chunkedge::prelude::*;
 use chunkedge::protocol::sound::SoundCategory;
 use chunkedge::protocol::Sound;
 use chunkedge_inventory::HeldItem;
-use item_menu::{ItemMenu, ItemMenuPlugin, MenuItemSelectEvent};
+use item_menu::{ItemMenu, ItemMenuPlugin, MenuItemSelectMessage};
 
 pub fn main() {
     App::new()
@@ -78,7 +78,7 @@ fn init_clients(
         mut inventory,
     ) in &mut clients
     {
-        let layer = layers.single();
+        let layer = layers.single().unwrap();
 
         pos.0 = [0.0, f64::from(SPAWN_Y) + 1.0, 0.0].into();
         layer_id.0 = layer;
@@ -94,10 +94,10 @@ fn init_clients(
 fn on_item_interact(
     mut commands: Commands,
     clients: Query<(Entity, &HeldItem, &Inventory)>,
-    mut events: EventReader<InteractItemEvent>,
+    mut messages: MessageReader<InteractItemMessage>,
 ) {
-    for event in events.read() {
-        let Ok((player_ent, held_item, inventory)) = clients.get(event.client) else {
+    for message in messages.read() {
+        let Ok((player_ent, held_item, inventory)) = clients.get(message.client) else {
             continue;
         };
         if *inventory.slot(held_item.slot()) == ItemStack::new(ItemKind::Compass, 1) {
@@ -118,14 +118,14 @@ fn open_menu(commands: &mut Commands, player: Entity) {
 
 fn on_make_selection(
     mut clients: Query<(&mut Client, &Position)>,
-    mut events: EventReader<MenuItemSelectEvent>,
+    mut messages: MessageReader<MenuItemSelectMessage>,
 ) {
-    for event in events.read() {
-        let Ok((mut client, pos)) = clients.get_mut(event.client) else {
+    for message in messages.read() {
+        let Ok((mut client, pos)) = clients.get_mut(message.client) else {
             continue;
         };
 
-        let selected_color = match event.idx {
+        let selected_color = match message.idx {
             3 => "§cRED",
             5 => "§aGREEN",
             _ => continue,
@@ -144,21 +144,21 @@ fn on_make_selection(
 
 mod item_menu {
     use chunkedge::prelude::*;
-    use chunkedge_inventory::ClickSlotEvent;
+    use chunkedge_inventory::ClickSlotMessage;
 
     pub(crate) struct ItemMenuPlugin;
 
     impl Plugin for ItemMenuPlugin {
         fn build(&self, app: &mut App) {
             app.add_systems(Update, (open_menu, select_menu_item))
-                .add_event::<MenuItemSelectEvent>()
-                .observe(close_menu);
+                .add_message::<MenuItemSelectMessage>()
+                .add_observer(close_menu);
         }
     }
 
-    /// This event is fired when the player interacts with an item in the menu.
-    #[derive(Debug, Clone, PartialEq, Eq, Event)]
-    pub(crate) struct MenuItemSelectEvent {
+    /// This message is fired when the player interacts with an item in the menu.
+    #[derive(Debug, Clone, PartialEq, Eq, Message)]
+    pub(crate) struct MenuItemSelectMessage {
         /// Player entity
         pub client: Entity,
         /// Index of the item in the menu
@@ -195,7 +195,7 @@ mod item_menu {
     }
 
     fn close_menu(
-        _trigger: Trigger<OnRemove, OpenInventory>,
+        _trigger: On<Remove, OpenInventory>,
         mut commands: Commands,
         clients: Query<Entity, With<ItemMenu>>,
     ) {
@@ -206,12 +206,12 @@ mod item_menu {
 
     fn select_menu_item(
         mut clients: Query<(Entity, &ItemMenu)>,
-        mut events: EventReader<ClickSlotEvent>,
-        mut event_writer: EventWriter<MenuItemSelectEvent>,
+        mut messages: MessageReader<ClickSlotMessage>,
+        mut message_writer: MessageWriter<MenuItemSelectMessage>,
     ) {
-        for event in events.read() {
-            let selected_slot = event.slot_id;
-            let Ok((player, item_menu)) = clients.get_mut(event.client) else {
+        for message in messages.read() {
+            let selected_slot = message.slot_id;
+            let Ok((player, item_menu)) = clients.get_mut(message.client) else {
                 continue;
             };
             // check that the selected item is not in the player's own inventory
@@ -219,7 +219,7 @@ mod item_menu {
                 continue;
             }
 
-            event_writer.send(MenuItemSelectEvent {
+            message_writer.write(MenuItemSelectMessage {
                 client: player,
                 idx: selected_slot as u16,
             });

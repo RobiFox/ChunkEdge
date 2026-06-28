@@ -4,27 +4,27 @@ use chunkedge_entity::{EntityAnimation, EntityAnimations};
 use chunkedge_protocol::packets::play::SwingC2s;
 use chunkedge_protocol::Hand;
 
-use crate::event_loop::{EventLoopPreUpdate, PacketEvent};
+use crate::event_loop::{EventLoopPreUpdate, PacketMessage};
 
 pub struct HandSwingPlugin;
 
 impl Plugin for HandSwingPlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<HandSwingEvent>()
+        app.add_message::<HandSwingMessage>()
             .add_systems(EventLoopPreUpdate, handle_hand_swing);
     }
 }
 
-#[derive(Event, Copy, Clone, PartialEq, Eq, Debug)]
-pub struct HandSwingEvent {
+#[derive(Message, Copy, Clone, PartialEq, Eq, Debug)]
+pub struct HandSwingMessage {
     pub client: Entity,
     pub hand: Hand,
 }
 
 fn handle_hand_swing(
-    mut packets: EventReader<PacketEvent>,
+    mut packets: MessageReader<PacketMessage>,
     mut clients: Query<&mut EntityAnimations>,
-    mut events: EventWriter<HandSwingEvent>,
+    mut messages: MessageWriter<HandSwingMessage>,
 ) {
     for packet in packets.read() {
         if let Some(pkt) = packet.decode::<SwingC2s>() {
@@ -35,7 +35,7 @@ fn handle_hand_swing(
                 });
             }
 
-            events.send(HandSwingEvent {
+            messages.write(HandSwingMessage {
                 client: packet.client,
                 hand: pkt.hand,
             });

@@ -14,17 +14,17 @@ use chunkedge_protocol::{VarInt, WritePacket};
 use crate::client::Client;
 use crate::EventLoopPostUpdate;
 
-/// Event for when a status effect is added to an entity or the amplifier or
+/// Message for when a status effect is added to an entity or the amplifier or
 /// duration of an existing status effect is changed.
-#[derive(Event, Clone, PartialEq, Eq, Debug)]
-pub struct StatusEffectAdded {
+#[derive(Message, Clone, PartialEq, Eq, Debug)]
+pub struct StatusEffectAddedMessage {
     pub entity: Entity,
     pub status_effect: StatusEffect,
 }
 
-/// Event for when a status effect is removed from an entity.
-#[derive(Event, Clone, PartialEq, Eq, Debug)]
-pub struct StatusEffectRemoved {
+/// Message for when a status effect is removed from an entity.
+#[derive(Message, Clone, PartialEq, Eq, Debug)]
+pub struct StatusEffectRemovedMessage {
     pub entity: Entity,
     pub status_effect: ActiveStatusEffect,
 }
@@ -33,8 +33,8 @@ pub struct StatusEffectPlugin;
 
 impl Plugin for StatusEffectPlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<StatusEffectAdded>()
-            .add_event::<StatusEffectRemoved>()
+        app.add_message::<StatusEffectAddedMessage>()
+            .add_message::<StatusEffectRemovedMessage>()
             .add_systems(
                 EventLoopPostUpdate,
                 (
@@ -81,8 +81,8 @@ struct StatusEffectQuery {
 
 fn add_status_effects(
     mut query: Query<StatusEffectQuery>,
-    mut add_events: EventWriter<StatusEffectAdded>,
-    mut remove_events: EventWriter<StatusEffectRemoved>,
+    mut add_messages: MessageWriter<StatusEffectAddedMessage>,
+    mut remove_messages: MessageWriter<StatusEffectRemovedMessage>,
 ) {
     for mut query in &mut query {
         let updated = query.active_effects.apply_changes();
@@ -95,12 +95,12 @@ fn add_status_effects(
 
         for (status_effect, prev) in updated {
             if query.active_effects.has_effect(status_effect) {
-                add_events.send(StatusEffectAdded {
+                add_messages.write(StatusEffectAddedMessage {
                     entity: query.entity,
                     status_effect,
                 });
             } else if let Some(prev) = prev {
-                remove_events.send(StatusEffectRemoved {
+                remove_messages.write(StatusEffectRemovedMessage {
                     entity: query.entity,
                     status_effect: prev,
                 });
@@ -143,11 +143,12 @@ fn set_swirl(
 
 /// Used to set the color of the swirls in the potion effect.
 ///
-/// Equivalent to net.minecraft.component.type.PotionContentsComponent#mixColors (Yarn mapping).
+/// Equivalent to net.minecraft.component.type.PotionContentsComponent#mixColors
+/// (Yarn mapping).
 fn _get_color(effects: &ActiveStatusEffects) -> i32 {
     if effects.no_effects() {
-        // vanilla mc seems to return 0xFF385DC6 (i32), decimal: -13083194 if there are no effects
-        // dunno why
+        // vanilla mc seems to return 0xFF385DC6 (i32), decimal: -13083194 if there are
+        // no effects dunno why
         // imma just say to return 0 to remove the swirls
         return 0;
     }
@@ -179,5 +180,5 @@ fn _get_color(effects: &ActiveStatusEffects) -> i32 {
     let g = g / total;
     let b = b / total;
     // Alpha is always 255
-    ((0xFF_u32 << 24) | (r << 16) | (g << 8) | b) as i32
+    ((0xff_u32 << 24) | (r << 16) | (g << 8) | b) as i32
 }

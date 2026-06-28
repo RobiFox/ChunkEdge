@@ -7,9 +7,9 @@ use chunkedge::status_effects::{AttributeModifier, StatusEffect};
 use chunkedge_server::entity::attributes::{EntityAttribute, EntityAttributes};
 use chunkedge_server::entity::entity::Flags;
 use chunkedge_server::entity::living::{Absorption, Health};
-use chunkedge_server::status_effect::{StatusEffectAdded, StatusEffectRemoved};
-use rand::seq::SliceRandom;
-use rand::Rng;
+use chunkedge_server::status_effect::{StatusEffectAddedMessage, StatusEffectRemovedMessage};
+use rand::seq::IndexedRandom;
+use rand::RngExt;
 
 const SPAWN_Y: i32 = 64;
 
@@ -119,7 +119,7 @@ fn init_clients(
         mut game_mode,
     ) in &mut clients
     {
-        let layer = layers.single();
+        let layer = layers.single().unwrap();
 
         layer_id.0 = layer;
         visible_chunk_layer.0 = layer;
@@ -135,16 +135,16 @@ fn init_clients(
 
 pub fn add_potion_effect(
     mut clients: Query<&mut ActiveStatusEffects>,
-    mut events: EventReader<SneakEvent>,
+    mut messages: MessageReader<SneakMessage>,
 ) {
-    let mut rng = rand::thread_rng();
-    for event in events.read() {
-        if event.state == SneakState::Start {
-            if let Ok(mut status) = clients.get_mut(event.client) {
+    let mut rng = rand::rng();
+    for message in messages.read() {
+        if message.state == SneakState::Start {
+            if let Ok(mut status) = clients.get_mut(message.client) {
                 status.apply(
                     ActiveStatusEffect::from_effect(*StatusEffect::ALL.choose(&mut rng).unwrap())
-                        .with_duration(rng.gen_range(10..1000))
-                        .with_amplifier(rng.gen_range(0..5)),
+                        .with_duration(rng.random_range(10..1000))
+                        .with_amplifier(rng.random_range(0..5)),
                 );
             }
         }
@@ -208,15 +208,15 @@ pub fn handle_status_effect_added(
         Option<&mut Absorption>,
         &mut Flags,
     )>,
-    mut events: EventReader<StatusEffectAdded>,
+    mut messages: MessageReader<StatusEffectAddedMessage>,
 ) {
-    for event in events.read() {
+    for message in messages.read() {
         if let Ok((status, mut attributes, mut health, absorption, mut flags)) =
-            clients.get_mut(event.entity)
+            clients.get_mut(message.entity)
         {
-            let effect = status.get_current_effect(event.status_effect).unwrap();
+            let effect = status.get_current_effect(message.status_effect).unwrap();
 
-            match event.status_effect {
+            match message.status_effect {
                 StatusEffect::Absorption => {
                     // not quite how vanilla does it. if you want to do it the vanilla way, you'll
                     // need to keep track of the previous absorption value and subtract that from
@@ -264,13 +264,13 @@ pub fn handle_status_effect_removed(
         Option<&mut Absorption>,
         &mut Flags,
     )>,
-    mut events: EventReader<StatusEffectRemoved>,
+    mut messages: MessageReader<StatusEffectRemovedMessage>,
 ) {
-    for event in events.read() {
+    for message in messages.read() {
         if let Ok((mut attributes, mut health, absorption, mut flags)) =
-            clients.get_mut(event.entity)
+            clients.get_mut(message.entity)
         {
-            let effect = &event.status_effect;
+            let effect = &message.status_effect;
             match effect.status_effect() {
                 StatusEffect::Absorption => {
                     if let Some(mut absorption) = absorption {
