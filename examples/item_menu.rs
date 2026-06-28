@@ -1,40 +1,35 @@
 //! This example shows how to use a read-only [`OpenInventory`] as a menu,
 //! in which the player is able to select items by clicking on them.
 //! This is commonly used on minigame servers (e.g for team selection).
-
-#![allow(clippy::type_complexity)]
-
-const SPAWN_Y: i32 = 64;
-
-use chunkedge::interact_item::InteractItemMessage;
+#[allow(unused_imports)]
+use chunkedge::inventory::ClickSlotMessage;
+use chunkedge::log::LogPlugin;
 use chunkedge::prelude::*;
 use chunkedge::protocol::sound::SoundCategory;
 use chunkedge::protocol::Sound;
-use chunkedge_inventory::HeldItem;
-use item_menu::{ItemMenu, ItemMenuPlugin, MenuItemSelectMessage};
+use std::marker::PhantomData;
 
-pub fn main() {
+const SPAWN_Y: i32 = 64;
+
+pub(crate) fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
-        .add_plugins(ItemMenuPlugin)
+        .insert_resource(NetworkSettings {
+            connection_mode: ConnectionMode::Offline,
+            ..Default::default()
+        })
+        .add_plugins(DefaultPlugins.build().disable::<LogPlugin>())
+        .add_plugins(InventoryMenuPlugin::<RedGreenClick>::default())
         .add_systems(Startup, setup)
-        .add_systems(
-            Update,
-            (
-                init_clients,
-                despawn_disconnected_clients,
-                on_item_interact,
-                on_make_selection,
-            ),
-        )
+        .add_systems(Update, (init_clients, despawn_disconnected_clients, sneak))
+        .add_systems(Update, click_in_menu)
         .run();
 }
 
 fn setup(
     mut commands: Commands,
     server: Res<Server>,
-    dimensions: Res<DimensionTypeRegistry>,
     biomes: Res<BiomeRegistry>,
+    dimensions: Res<DimensionTypeRegistry>,
 ) {
     let mut layer = LayerBundle::new(ident!("overworld"), &dimensions, &biomes, &server);
 
@@ -58,77 +53,97 @@ fn setup(
 fn init_clients(
     mut clients: Query<
         (
-            &mut Position,
             &mut EntityLayerId,
             &mut VisibleChunkLayer,
             &mut VisibleEntityLayers,
+            &mut Position,
             &mut GameMode,
-            &mut Inventory,
         ),
         Added<Client>,
     >,
     layers: Query<Entity, (With<ChunkLayer>, With<EntityLayer>)>,
 ) {
     for (
-        mut pos,
         mut layer_id,
         mut visible_chunk_layer,
         mut visible_entity_layers,
+        mut pos,
         mut game_mode,
-        mut inventory,
     ) in &mut clients
     {
         let layer = layers.single().unwrap();
 
-        pos.0 = [0.0, f64::from(SPAWN_Y) + 1.0, 0.0].into();
         layer_id.0 = layer;
         visible_chunk_layer.0 = layer;
         visible_entity_layers.0.insert(layer);
-        *game_mode = GameMode::Survival;
-
-        // 40 is the fifth hotbar slot
-        inventory.set_slot(40, ItemStack::new(ItemKind::Compass, 1));
+        pos.set([0.0, f64::from(SPAWN_Y) + 1.0, 0.0]);
+        *game_mode = GameMode::Creative;
     }
 }
 
-fn on_item_interact(
+fn sneak(
+    clients: Query<(Entity, &Client)>,
+    mut messages: MessageReader<SneakMessage>,
     mut commands: Commands,
-    clients: Query<(Entity, &HeldItem, &Inventory)>,
-    mut messages: MessageReader<InteractItemMessage>,
 ) {
     for message in messages.read() {
-        let Ok((player_ent, held_item, inventory)) = clients.get(message.client) else {
-            continue;
-        };
-        if *inventory.slot(held_item.slot()) == ItemStack::new(ItemKind::Compass, 1) {
-            open_menu(&mut commands, player_ent);
+        if message.state == SneakState::Start {
+            if let Ok((entity, _)) = clients.get(message.client) {
+                open_menu(&mut commands, entity)
+            }
         }
     }
 }
 
-fn open_menu(commands: &mut Commands, player: Entity) {
-    let mut menu_inv = Inventory::new(InventoryKind::Generic3x3);
-
-    menu_inv.set_slot(3, ItemStack::new(ItemKind::RedWool, 1));
-    menu_inv.set_slot(5, ItemStack::new(ItemKind::GreenWool, 1));
-
-    let menu = ItemMenu::new(menu_inv);
-    commands.entity(player).insert(menu);
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum RedGreenClick {
+    Red,
+    Green,
 }
 
-fn on_make_selection(
+fn open_menu(commands: &mut Commands, player: Entity) {
+    let mut menu_inv = Inventory::new(InventoryKind::Generic3x3);
+    menu_inv.readonly = true;
+
+    menu_inv.set_slot(
+        3,
+        ItemStack::new_with_entity(
+            ItemKind::RedWool,
+            1,
+            commands
+                .spawn(OnClicked {
+                    action: RedGreenClick::Red,
+                })
+                .id(),
+        ),
+    );
+    menu_inv.set_slot(
+        5,
+        ItemStack::new_with_entity(
+            ItemKind::GreenWool,
+            1,
+            commands
+                .spawn(OnClicked {
+                    action: RedGreenClick::Green,
+                })
+                .id(),
+        ),
+    );
+
+    let inventory = commands.spawn(menu_inv).id();
+
+    commands
+        .entity(player)
+        .insert(OpenInventory::new(inventory));
+}
+
+fn click_in_menu(
+    mut messages: MessageReader<OnClickedSelectMessage<RedGreenClick>>,
     mut clients: Query<(&mut Client, &Position)>,
-    mut messages: MessageReader<MenuItemSelectMessage>,
 ) {
     for message in messages.read() {
         let Ok((mut client, pos)) = clients.get_mut(message.client) else {
             continue;
-        };
-
-        let selected_color = match message.idx {
-            3 => "§cRED",
-            5 => "§aGREEN",
-            _ => continue,
         };
 
         client.play_sound(
@@ -138,91 +153,76 @@ fn on_make_selection(
             1.0,
             1.0,
         );
-        client.send_chat_message(format!("you clicked: {selected_color}"));
+
+        match message.action {
+            RedGreenClick::Red => {
+                client.send_chat_message("You clicked §cRed");
+            }
+            RedGreenClick::Green => {
+                client.send_chat_message("You clicked §aGreen");
+            }
+        }
     }
 }
 
-mod item_menu {
-    use chunkedge::prelude::*;
-    use chunkedge_inventory::ClickSlotMessage;
+// on click api stuff below
 
-    pub(crate) struct ItemMenuPlugin;
+struct InventoryMenuPlugin<T> {
+    _marker: PhantomData<T>,
+}
 
-    impl Plugin for ItemMenuPlugin {
-        fn build(&self, app: &mut App) {
-            app.add_systems(Update, (open_menu, select_menu_item))
-                .add_message::<MenuItemSelectMessage>()
-                .add_observer(close_menu);
+impl<T> Default for InventoryMenuPlugin<T> {
+    fn default() -> Self {
+        Self {
+            _marker: PhantomData,
         }
     }
+}
 
-    /// This message is fired when the player interacts with an item in the menu.
-    #[derive(Debug, Clone, PartialEq, Eq, Message)]
-    pub(crate) struct MenuItemSelectMessage {
-        /// Player entity
-        pub client: Entity,
-        /// Index of the item in the menu
-        pub idx: u16,
+impl<T: Send + Sync + Clone + 'static> Plugin for InventoryMenuPlugin<T> {
+    fn build(&self, app: &mut App) {
+        app.add_message::<OnClickedSelectMessage<T>>()
+            .add_systems(Update, select_menu_item::<T>);
     }
+}
 
-    /// The [`ItemMenu`] is a component, so it will open up once you attach it
-    /// to a player and it will close once you remove it from the player (or
-    /// in this implementation also if the player closes it).
-    #[derive(Debug, Clone, Component)]
-    pub(crate) struct ItemMenu {
-        /// Item menu
-        pub menu: Inventory,
-    }
+#[derive(Component, Debug, Clone)]
+struct OnClicked<T> {
+    action: T,
+}
 
-    impl ItemMenu {
-        pub(crate) fn new(mut menu: Inventory) -> Self {
-            menu.readonly = true;
-            Self { menu }
-        }
-    }
+#[derive(Debug, Clone, PartialEq, Message)]
+struct OnClickedSelectMessage<T> {
+    /// Player entity
+    pub client: Entity,
+    /// Clicked item
+    pub clicked: ItemStack,
+    /// T action
+    action: T,
+}
 
-    fn open_menu(
-        mut commands: Commands,
-        mut clients: Query<(Entity, &mut ItemMenu), Added<ItemMenu>>,
-    ) {
-        for (player, item_menu) in &mut clients {
-            let inventory = commands.spawn(item_menu.menu.clone()).id();
+fn select_menu_item<T: Send + Sync + Clone + 'static>(
+    mut clients: Query<Entity>,
+    mut messages: MessageReader<ClickSlotMessage>,
+    mut message_writer: MessageWriter<OnClickedSelectMessage<T>>,
+    click_query: Query<&OnClicked<T>>,
+) {
+    for message in messages.read() {
+        let Ok(player) = clients.get_mut(message.client) else {
+            continue;
+        };
+        let Some(clicked_item_entity) = message.carried_item.entity else {
+            continue;
+        };
 
-            commands
-                .entity(player)
-                .insert(OpenInventory::new(inventory));
-        }
-    }
+        let Ok(clicked_item_on_clicked) = click_query.get(clicked_item_entity) else {
+            continue;
+        };
 
-    fn close_menu(
-        _trigger: On<Remove, OpenInventory>,
-        mut commands: Commands,
-        clients: Query<Entity, With<ItemMenu>>,
-    ) {
-        for player in clients.iter() {
-            commands.entity(player).remove::<ItemMenu>();
-        }
-    }
-
-    fn select_menu_item(
-        mut clients: Query<(Entity, &ItemMenu)>,
-        mut messages: MessageReader<ClickSlotMessage>,
-        mut message_writer: MessageWriter<MenuItemSelectMessage>,
-    ) {
-        for message in messages.read() {
-            let selected_slot = message.slot_id;
-            let Ok((player, item_menu)) = clients.get_mut(message.client) else {
-                continue;
-            };
-            // check that the selected item is not in the player's own inventory
-            if selected_slot as u16 >= item_menu.menu.slot_count() {
-                continue;
-            }
-
-            message_writer.write(MenuItemSelectMessage {
-                client: player,
-                idx: selected_slot as u16,
-            });
-        }
+        message_writer.write(OnClickedSelectMessage {
+            client: player,
+            clicked: message.carried_item.clone(),
+            action: clicked_item_on_clicked.action.clone(),
+        });
     }
 }
