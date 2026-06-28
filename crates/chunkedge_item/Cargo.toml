@@ -14,6 +14,7 @@ chunkedge_generated.workspace = true
 chunkedge_ident.workspace = true
 chunkedge_nbt.workspace = true
 chunkedge_text.workspace = true
+bevy_ecs.workspace = true
 
 [lints]
 workspace = true

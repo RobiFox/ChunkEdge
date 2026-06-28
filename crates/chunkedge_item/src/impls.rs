@@ -333,6 +333,7 @@ pub fn decode_item_stack_recursive(
         item,
         count: count as i8,
         components,
+        entity: None
     })
 }
 

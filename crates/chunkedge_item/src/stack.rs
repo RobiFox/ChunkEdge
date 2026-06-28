@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 use std::io::Write;
-
+use bevy_ecs::prelude::Entity;
 use chunkedge_binary::{Encode, VarInt};
 use chunkedge_generated::item::ItemKind;
 
@@ -14,6 +14,7 @@ pub struct ItemStack {
     pub item: ItemKind,
     pub count: i8,
     pub(crate) components: [Patchable<Box<ItemComponent>>; NUM_ITEM_COMPONENTS],
+    pub entity: Option<Entity>
 }
 
 impl Default for ItemStack {
@@ -87,6 +88,7 @@ impl ItemStack {
         item: ItemKind::Air,
         count: 0,
         components: [const { Patchable::None }; NUM_ITEM_COMPONENTS],
+        entity: None
     };
 
     /// Creates a new item stack without any components.
@@ -96,6 +98,18 @@ impl ItemStack {
             item,
             count,
             components: [const { Patchable::None }; NUM_ITEM_COMPONENTS],
+            entity: None
+        }
+    }
+
+    /// Creates a new item stack without any components and an entity.
+    #[must_use]
+    pub const fn new_with_entity(item: ItemKind, count: i8, entity: Entity) -> Self {
+        Self {
+            item,
+            count,
+            components: [const { Patchable::None }; NUM_ITEM_COMPONENTS],
+            entity: Some(entity)
         }
     }
 
@@ -107,6 +121,19 @@ impl ItemStack {
             item,
             count,
             components,
+            entity: None
+        }
+    }
+
+    /// Creates a new item stack with the vanilla default components for the
+    /// given [`ItemKind`].
+    pub fn new_vanilla_with_entity(item: ItemKind, count: i8, entity: Entity) -> Self {
+        let components = item.default_components();
+        Self {
+            item,
+            count,
+            components,
+            entity: Some(entity)
         }
     }
 
